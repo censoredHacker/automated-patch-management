@@ -1,0 +1,28 @@
+# Global settings file (optional). Pass with --settings <path>.
+# All keys here can also be overridden by CLI flags.
+
+logging:
+  level: INFO                 # DEBUG | INFO | WARNING | ERROR
+  json: true                  # structured JSON logs to file
+  console: true               # human-readable console output
+
+retries:
+  max_attempts: 3
+  initial_backoff_seconds: 2
+  max_backoff_seconds: 30
+
+network:
+  command_timeout_seconds: 600
+  connect_timeout_seconds: 30
+  ssh_strict_host_key_checking: true
+  winrm_server_cert_validation: validate   # validate | ignore (NOT recommended)
+
+vulnerability_source:
+  provider: nvd               # nvd | local_json
+  cache_ttl_hours: 24
+  # Used when provider == local_json
+  # local_path: ./data/vulns.json
+
+reporting:
+  output_dir: ./reports
+  formats: [json, html]

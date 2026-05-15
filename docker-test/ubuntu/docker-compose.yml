@@ -1,0 +1,28 @@
+# docker-compose definition for the patchmgr Ubuntu test target.
+#
+# Usage:
+#     docker compose up -d --build      # build + start in background
+#     docker compose logs -f            # follow sshd logs
+#     docker compose down               # stop + remove
+#
+# The container is published on host port 2222 to avoid clashing with
+# any local SSH server. The `patchmgr-net` network is private to this
+# compose project — nothing outside it can reach the container.
+
+services:
+  ubuntu-vuln:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: patchmgr/ubuntu-vuln:focal
+    container_name: patchmgr-ubuntu-vuln
+    hostname: ubuntu-vuln
+    ports:
+      - "127.0.0.1:2222:22"   # bound to localhost only on purpose
+    networks:
+      - patchmgr-net
+    restart: "no"
+
+networks:
+  patchmgr-net:
+    driver: bridge

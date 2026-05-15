@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>patchmgr report — {{ report.metadata.run_id }}</title>
+<style>
+  /* Force a light theme regardless of the OS / browser preference so the
+     report is always readable. Every colour below is an explicit value
+     so a user-agent dark-mode override cannot wash anything out. */
+  :root { color-scheme: light; }
+  html, body { background: #ffffff; color: #1a1a1a; }
+  body { font: 14px/1.45 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+         margin: 2rem; max-width: 1100px; }
+  h1, h2 { color: #111111; margin-top: 1.5rem; }
+  h1 { margin-top: 0; }
+  a { color: #0b5cd6; }
+
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0;
+          background: #ffffff; }
+  th, td { border: 1px solid #d0d0d0; padding: .45rem .65rem; text-align: left;
+           vertical-align: top; color: #1a1a1a; }
+  th { background: #f0f2f5; color: #111111; font-weight: 600; }
+  tbody tr:nth-child(even) td { background: #fafbfc; }
+
+  .ok   { color: #0a7d20; font-weight: 600; }
+  .fail { color: #b3261e; font-weight: 600; }
+
+  /* Severity row tints — pastel backgrounds with dark text so contrast
+     stays AA-compliant. !important guards against zebra-stripe overrides. */
+  .sev-critical td { background: #fde7e7 !important; color: #5a0d0d; }
+  .sev-high     td { background: #fff1d6 !important; color: #5a3a00; }
+  .sev-medium   td { background: #fff9d6 !important; color: #4a4500; }
+  .sev-low      td { background: #eaf6ff !important; color: #0a3d66; }
+  .sev-critical td code,
+  .sev-high     td code,
+  .sev-medium   td code,
+  .sev-low      td code { background: rgba(255,255,255,0.65); color: inherit; }
+
+  .meta { display: grid; grid-template-columns: max-content 1fr;
+          gap: .25rem 1rem; margin: .75rem 0 1.25rem; }
+  .meta strong { color: #111111; }
+
+  code { background: #f1f3f5; color: #1a1a1a; padding: 0 .3rem;
+         border-radius: 3px; font-family: ui-monospace, Consolas, Menlo, monospace; }
+  pre  { background: #f7f8fa; color: #1a1a1a; padding: .6rem .8rem;
+         border: 1px solid #e3e6ea; border-radius: 4px; overflow: auto;
+         font-family: ui-monospace, Consolas, Menlo, monospace; }
+
+  details summary { cursor: pointer; color: #0b5cd6; }
+  details[open] summary { color: #1a1a1a; }
+
+  footer { margin-top: 2rem; color: #6a6a6a; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>patchmgr report</h1>
+
+<section class="meta">
+  <strong>Run ID:</strong>     <code>{{ report.metadata.run_id }}</code>
+  <strong>Action:</strong>     {{ report.metadata.action }}
+  <strong>Tool version:</strong>{{ report.metadata.tool_version }}
+  <strong>Started:</strong>    {{ report.metadata.started_at }}
+  <strong>Finished:</strong>   {{ report.metadata.finished_at or "(in progress)" }}
+  <strong>Duration:</strong>   {{ report.metadata.duration_seconds }} s
+</section>
+
+<h2>Target</h2>
+<table>
+  <tr><th>Host</th><td>{{ report.target.host }}</td></tr>
+  <tr><th>User</th><td>{{ report.target.username }}</td></tr>
+  <tr><th>Port</th><td>{{ report.target.port }}</td></tr>
+  <tr><th>Auth</th><td>{{ report.target.auth }}</td></tr>
+  <tr><th>OS</th><td>{{ report.os_info.distro }} {{ report.os_info.version }}
+      ({{ report.os_info.kernel }} / {{ report.os_info.architecture }})</td></tr>
+  <tr><th>Installed packages</th><td>{{ report.installed_packages_count }}</td></tr>
+</table>
+
+<h2>Summary</h2>
+<table>
+  <tr>
+    <th>Patches total</th><td>{{ report.summary.patches_total }}</td>
+    <th>Succeeded</th><td class="ok">{{ report.summary.patches_succeeded }}</td>
+    <th>Failed</th><td class="fail">{{ report.summary.patches_failed }}</td>
+    <th>Success rate</th><td>{{ report.summary.success_rate_percent }}%</td>
+  </tr>
+</table>
+
+{% if report.reboot %}
+<h2>Reboot</h2>
+<table>
+  <tr><th>Required</th><td>{{ report.reboot.required }}</td></tr>
+  <tr><th>Mode</th><td>{{ report.reboot.mode }}</td></tr>
+  <tr><th>Issued</th><td>{{ report.reboot.issued }}</td></tr>
+  <tr><th>Scheduled at</th><td>{{ report.reboot.scheduled_at or "—" }}</td></tr>
+  <tr><th>Note</th><td>{{ report.reboot.note }}</td></tr>
+</table>
+{% endif %}
+
+<h2>Prioritised patches</h2>
+{% if report.prioritized_patches %}
+<table>
+  <thead>
+    <tr>
+      <th>Severity</th><th>Identifier</th><th>Title</th>
+      <th>Package</th><th>Current</th><th>Target</th><th>CVEs</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for ep in report.prioritized_patches %}
+    {% set sev = ep.effective_severity %}
+    <tr class="sev-{{ sev }}">
+      <td>{{ sev }}</td>
+      <td><code>{{ ep.patch.identifier }}</code></td>
+      <td>{{ ep.patch.title }}</td>
+      <td>{{ ep.patch.package or "—" }}</td>
+      <td>{{ ep.patch.current_version or "—" }}</td>
+      <td>{{ ep.patch.target_version or "—" }}</td>
+      <td>
+        {% if ep.cves %}
+          <details><summary>{{ ep.cves|length }} CVE(s)</summary>
+            <ul>
+            {% for c in ep.cves %}
+              <li><code>{{ c.cve_id }}</code> — CVSS {{ c.cvss_score }}
+                  ({{ c.severity }})</li>
+            {% endfor %}
+            </ul>
+          </details>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p>No patches at or above the configured severity threshold.</p>{% endif %}
+
+<h2>Applied patches</h2>
+{% if report.applied_patches %}
+<table>
+  <thead><tr><th>Identifier</th><th>Result</th><th>Duration</th><th>Error / output</th></tr></thead>
+  <tbody>
+  {% for r in report.applied_patches %}
+    <tr>
+      <td><code>{{ r.patch.identifier }}</code></td>
+      <td class="{{ 'ok' if r.success else 'fail' }}">
+        {{ "OK" if r.success else "FAIL" }}
+      </td>
+      <td>{{ "%.1f" % r.duration_seconds }} s</td>
+      <td>
+        {% if r.error %}<strong>{{ r.error }}</strong><br>{% endif %}
+        {% if r.stderr_tail %}<details><summary>stderr</summary>
+          <pre>{{ r.stderr_tail }}</pre></details>{% endif %}
+        {% if r.stdout_tail %}<details><summary>stdout</summary>
+          <pre>{{ r.stdout_tail }}</pre></details>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p>No patches applied (scan-only run, or nothing matched the filter).</p>{% endif %}
+
+<footer style="margin-top:2rem;color:#888;">
+  Generated by patchmgr {{ report.metadata.tool_version }}.
+</footer>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# Example batch inventory consumed by `patchmgr batch --inventory ...`.
+# Each entry describes one remote host. Sensitive values can be replaced
+# with environment variable references using the ${VAR_NAME} syntax.
+
+defaults:
+  # Global defaults applied to every host unless overridden per-host.
+  severity_min: high          # low | medium | high | critical
+  reboot: manual              # auto | scheduled | manual
+  timeout: 600                # seconds per remote command
+  dry_run: true               # safer default; set false to actually patch
+
+hosts:
+  - name: web-01
+    os: linux
+    address: 10.0.0.11
+    port: 22
+    username: admin
+    # Either password OR key_path is required.
+    password: ${WEB01_PASSWORD}
+    # key_path: ~/.ssh/id_rsa
+    # key_passphrase: ${SSH_PASSPHRASE}
+
+  - name: db-01
+    os: linux
+    address: 10.0.0.12
+    username: root
+    key_path: ~/.ssh/id_rsa
+    severity_min: critical    # per-host override
+
+  - name: win-app-01
+    os: windows
+    address: 10.0.0.21
+    port: 5986                # WinRM HTTPS
+    username: Administrator
+    password: ${WIN_APP_01_PASSWORD}
+    winrm_transport: ntlm     # ntlm | kerberos | basic (basic discouraged)
+    winrm_verify_ssl: true
+
+  - name: aix-erp-01
+    os: aix
+    address: 10.0.0.31
+    username: root
+    password: ${AIX_ERP_01_PASSWORD}
+    # AIX handlers are UNVERIFIED — keep dry_run=true unless you have tested.
+    dry_run: true

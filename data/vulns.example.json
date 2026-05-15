@@ -1,0 +1,22 @@
+{
+  "openssh-server": [
+    {
+      "cve_id": "CVE-2024-EXAMPLE-1",
+      "affected_versions": ["<8.9p2"],
+      "fixed_version": "8.9p2",
+      "cvss_score": 7.5,
+      "summary": "Example sshd vulnerability used in unit tests and offline demos.",
+      "references": ["https://example.invalid/CVE-2024-EXAMPLE-1"]
+    }
+  ],
+  "libc6": [
+    {
+      "cve_id": "CVE-2024-EXAMPLE-2",
+      "affected_versions": ["<2.36"],
+      "fixed_version": "2.36",
+      "cvss_score": 9.1,
+      "summary": "Example glibc heap overflow.",
+      "references": ["https://example.invalid/CVE-2024-EXAMPLE-2"]
+    }
+  ]
+}

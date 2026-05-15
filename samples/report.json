@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "run_id": "9b1e5c8a-1e7e-4c8f-9a3a-7e3b1c2d4f00",
+    "action": "patch",
+    "started_at": "2025-01-15T03:14:21+00:00",
+    "finished_at": "2025-01-15T03:18:47+00:00",
+    "duration_seconds": 266.42,
+    "tool_version": "0.1.0"
+  },
+  "target": {
+    "host": "10.0.0.11",
+    "username": "patchadmin",
+    "port": 22,
+    "auth": "key"
+  },
+  "os_info": {
+    "os_type": "linux",
+    "distro": "ubuntu",
+    "version": "22.04",
+    "kernel": "5.15.0-86-generic",
+    "architecture": "x86_64"
+  },
+  "installed_packages_count": 1284,
+  "prioritized_patches": [
+    {
+      "patch": {
+        "identifier": "openssl",
+        "title": "Upgrade openssl: 3.0.2-0ubuntu1.10 -> 3.0.2-0ubuntu1.18",
+        "severity": "high",
+        "package": "openssl",
+        "current_version": "3.0.2-0ubuntu1.10",
+        "target_version": "3.0.2-0ubuntu1.18",
+        "reboot_required": false,
+        "metadata": {}
+      },
+      "cves": [
+        {
+          "cve_id": "CVE-2024-5535",
+          "package": "openssl",
+          "installed_version": "3.0.2-0ubuntu1.10",
+          "fixed_version": "3.0.2-0ubuntu1.18",
+          "cvss_score": 9.1,
+          "severity": "critical",
+          "summary": "Buffer overread in SSL_select_next_proto.",
+          "references": ["https://www.openssl.org/news/secadv/20240603.txt"]
+        }
+      ],
+      "effective_severity": "critical"
+    },
+    {
+      "patch": {
+        "identifier": "linux-image-generic",
+        "title": "Upgrade linux-image-generic",
+        "severity": "high",
+        "package": "linux-image-generic",
+        "current_version": "5.15.0.86.83",
+        "target_version": "5.15.0.91.88",
+        "reboot_required": true,
+        "metadata": {}
+      },
+      "cves": [],
+      "effective_severity": "high"
+    }
+  ],
+  "applied_patches": [
+    {
+      "patch": {
+        "identifier": "openssl",
+        "title": "Upgrade openssl: 3.0.2-0ubuntu1.10 -> 3.0.2-0ubuntu1.18",
+        "severity": "high",
+        "package": "openssl",
+        "current_version": "3.0.2-0ubuntu1.10",
+        "target_version": "3.0.2-0ubuntu1.18",
+        "reboot_required": false,
+        "metadata": {}
+      },
+      "success": true,
+      "duration_seconds": 14.7,
+      "error": null,
+      "stdout_tail": "Setting up openssl (3.0.2-0ubuntu1.18) ...\n",
+      "stderr_tail": ""
+    },
+    {
+      "patch": {
+        "identifier": "linux-image-generic",
+        "title": "Upgrade linux-image-generic",
+        "severity": "high",
+        "package": "linux-image-generic",
+        "current_version": "5.15.0.86.83",
+        "target_version": "5.15.0.91.88",
+        "reboot_required": true,
+        "metadata": {}
+      },
+      "success": true,
+      "duration_seconds": 218.1,
+      "error": null,
+      "stdout_tail": "Setting up linux-image-generic (5.15.0.91.88) ...\n",
+      "stderr_tail": ""
+    }
+  ],
+  "reboot": {
+    "required": true,
+    "mode": "scheduled",
+    "scheduled_at": "02:00",
+    "issued": true,
+    "note": "reboot scheduled in 92 minutes (at 02:00)"
+  },
+  "summary": {
+    "patches_total": 2,
+    "patches_succeeded": 2,
+    "patches_failed": 0,
+    "success_rate_percent": 100.0
+  }
+}

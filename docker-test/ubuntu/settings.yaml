@@ -1,0 +1,29 @@
+# Test-only patchmgr settings for the Docker target.
+#
+# - SSH strict host key checking is OFF because the container generates
+#   a fresh host key on every build. NEVER use this setting against a
+#   real production fleet.
+# - Reports go into ./reports relative to wherever you run patchmgr.
+
+network:
+  connect_timeout_seconds: 15
+  ssh_strict_host_key_checking: false
+  winrm_server_cert_validation: validate
+
+vulnerability_source:
+  provider: nvd
+  cache_ttl_hours: 24
+
+retries:
+  max_attempts: 2
+  backoff_seconds: 2
+  max_backoff_seconds: 15
+
+logging:
+  level: INFO
+  console: true
+  json: true
+
+reporting:
+  output_dir: ./reports
+  formats: [json, html]

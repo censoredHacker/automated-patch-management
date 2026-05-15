@@ -1,0 +1,3 @@
+# Drop your own SSH public key on a new line below to enable key auth.
+# Lines starting with `#` are ignored by sshd. Without a real key, the
+# container falls back to password auth (user=patchadmin, pw=patchadmin).
