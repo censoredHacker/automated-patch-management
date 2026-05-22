@@ -49,6 +49,7 @@ class RunOptions:
     timeout: int = 600
     winrm_transport: str = "ntlm"
     winrm_verify_ssl: bool = True
+    minor_os_upgrade: bool = False
 
 
 def _make_transport(opts: RunOptions, settings: Settings) -> Transport:
@@ -97,7 +98,7 @@ def run_scan(
 
     with transport:
         handler = build_handler(opts.os_type, transport)
-        disc = discover(handler)
+        disc = discover(handler, minor_os_upgrade=opts.minor_os_upgrade)
         enriched = prioritize(
             missing=disc.missing,
             installed=disc.installed,
@@ -139,7 +140,7 @@ def run_patch(
 
     with transport:
         handler = build_handler(opts.os_type, transport)
-        disc = discover(handler)
+        disc = discover(handler, minor_os_upgrade=opts.minor_os_upgrade)
         os_info_dict = disc.os_info.to_dict()
         installed_count = len(disc.installed)
 

@@ -90,7 +90,7 @@ class AIXHandler(OSHandler):
         return out
 
     # ------------------------------------------------------------------
-    def list_missing_patches(self) -> Iterable[MissingPatch]:
+    def list_missing_patches(self, *, minor_os_upgrade: bool = False) -> Iterable[MissingPatch]:
         """List APARs known to fix issues on the installed TL/SP.
 
         ``instfix -ci`` prints CSV: APAR:abstract:status:fileset.

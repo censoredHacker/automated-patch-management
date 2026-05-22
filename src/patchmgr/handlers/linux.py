@@ -40,14 +40,18 @@ _PM_TABLE: dict[str, dict[str, str]] = {
         "bin": "dnf",
         "list_installed": "rpm -qa --qf '%{NAME}\\t%{VERSION}-%{RELEASE}\\n'",
         "list_updates": "dnf -q --refresh check-update --security || true",
+        "list_updates_all": "dnf -q --refresh check-update || true",
         "update_one": "sudo -n dnf -y --security update {pkg}",
+        "update_one_all": "sudo -n dnf -y update {pkg}",
         "update_all": "sudo -n dnf -y --security update",
     },
     "yum": {
         "bin": "yum",
         "list_installed": "rpm -qa --qf '%{NAME}\\t%{VERSION}-%{RELEASE}\\n'",
         "list_updates": "yum -q --security check-update || true",
+        "list_updates_all": "yum -q check-update || true",
         "update_one": "sudo -n yum -y --security update {pkg}",
+        "update_one_all": "sudo -n yum -y update {pkg}",
         "update_all": "sudo -n yum -y --security update",
     },
     "apt": {
@@ -63,7 +67,9 @@ _PM_TABLE: dict[str, dict[str, str]] = {
         "bin": "zypper",
         "list_installed": "rpm -qa --qf '%{NAME}\\t%{VERSION}-%{RELEASE}\\n'",
         "list_updates": "zypper --non-interactive list-patches --category security",
+        "list_updates_all": "zypper --non-interactive list-updates || true",
         "update_one": "sudo -n zypper --non-interactive patch --category security {pkg}",
+        "update_one_all": "sudo -n zypper --non-interactive update -y {pkg}",
         "update_all": "sudo -n zypper --non-interactive patch --category security",
     },
 }
@@ -132,18 +138,30 @@ class LinuxHandler(OSHandler):
         return list(_parse_name_version_lines(res.stdout, source=self._pm_key or ""))
 
     # ------------------------------------------------------------------
-    def list_missing_patches(self) -> Iterable[MissingPatch]:
+    def list_missing_patches(self, *, minor_os_upgrade: bool = False) -> Iterable[MissingPatch]:
         self._ensure_detected()
         pm = self._pm_key
         cfg = _PM_TABLE[pm]  # type: ignore[index]
-        res = self._transport.exec(cfg["list_updates"])
+        cmd_key = "list_updates_all" if (minor_os_upgrade and "list_updates_all" in cfg) else "list_updates"
+        res = self._transport.exec(cfg[cmd_key])
+        
+        from dataclasses import replace
+        
         if pm in ("yum", "dnf"):
-            return list(_parse_yum_dnf_updates(res.stdout))
-        if pm == "apt":
-            return list(_parse_apt_simulation(res.stdout))
-        if pm == "zypper":
-            return list(_parse_zypper_patches(res.stdout))
-        return []
+            patches = list(_parse_yum_dnf_updates(res.stdout))
+        elif pm == "apt":
+            patches = list(_parse_apt_simulation(res.stdout))
+        elif pm == "zypper":
+            patches = list(_parse_zypper_patches(res.stdout, minor_os_upgrade=minor_os_upgrade))
+        else:
+            patches = []
+            
+        if minor_os_upgrade:
+            return [
+                replace(p, severity="high", metadata={**p.metadata, "minor_os_upgrade": True})
+                for p in patches
+            ]
+        return patches
 
     # ------------------------------------------------------------------
     def apply_patch(self, patch: MissingPatch, *, dry_run: bool) -> PatchResult:
@@ -158,7 +176,9 @@ class LinuxHandler(OSHandler):
                 stdout="dry-run: no changes applied",
                 duration_seconds=0.0,
             )
-        cmd = cfg["update_one"].format(pkg=sh_quote(patch.identifier))
+        minor_os_upgrade = patch.metadata.get("minor_os_upgrade", False)
+        cmd_key = "update_one_all" if (minor_os_upgrade and "update_one_all" in cfg) else "update_one"
+        cmd = cfg[cmd_key].format(pkg=sh_quote(patch.identifier))
         start = time.monotonic()
         try:
             res = self._transport.exec(cmd, timeout=1800)
@@ -293,22 +313,35 @@ def _parse_apt_simulation(text: str) -> Iterable[MissingPatch]:
         )
 
 
-def _parse_zypper_patches(text: str) -> Iterable[MissingPatch]:
-    """`zypper list-patches --category security` prints a pipe-delimited table."""
+def _parse_zypper_patches(text: str, *, minor_os_upgrade: bool = False) -> Iterable[MissingPatch]:
+    """`zypper list-patches` or `zypper list-updates` prints a pipe-delimited table."""
     for line in text.splitlines():
         if "|" not in line:
             continue
         parts = [p.strip() for p in line.split("|")]
-        if len(parts) < 6 or parts[0].lower() in ("repository", "---"):
+        if len(parts) < 4 or parts[0].lower() in ("repository", "---"):
             continue
-        # repo | name | category | severity | interactive | status
-        name, category, severity = parts[1], parts[2], parts[3]
-        if category.lower() != "security":
-            continue
-        yield MissingPatch(
-            identifier=name,
-            title=f"SUSE security patch {name}",
-            severity=severity.lower() if severity else "high",
-            package=name,
-            reboot_required="reboot" in (parts[4] or "").lower(),
-        )
+        name = parts[1]
+        if minor_os_upgrade:
+            # zypper list-updates columns: Repository | Name | Current Version | Available Version | Arch
+            yield MissingPatch(
+                identifier=name,
+                title=f"Upgrade {name} to {parts[3] if len(parts) > 3 else 'latest'}",
+                severity="high",
+                package=name,
+                reboot_required=name.startswith(("kernel", "glibc", "systemd")),
+            )
+        else:
+            if len(parts) < 6:
+                continue
+            # repo | name | category | severity | interactive | status
+            category, severity = parts[2], parts[3]
+            if category.lower() != "security":
+                continue
+            yield MissingPatch(
+                identifier=name,
+                title=f"SUSE security patch {name}",
+                severity=severity.lower() if severity else "high",
+                package=name,
+                reboot_required="reboot" in (parts[4] or "").lower(),
+            )

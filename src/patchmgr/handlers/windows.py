@@ -167,7 +167,7 @@ class WindowsHandler(OSHandler):
         return out
 
     # ------------------------------------------------------------------
-    def list_missing_patches(self) -> Iterable[MissingPatch]:
+    def list_missing_patches(self, *, minor_os_upgrade: bool = False) -> Iterable[MissingPatch]:
         self._ensure_pswu()
         res = self._transport.exec(_LIST_UPDATES_PS, timeout=600)
         if not res.ok:
@@ -182,6 +182,8 @@ class WindowsHandler(OSHandler):
             ) from e
         if isinstance(data, dict):
             data = [data]
+        
+        from dataclasses import replace
         out: list[MissingPatch] = []
         for u in data:
             kb_raw = u.get("KB")
@@ -189,14 +191,17 @@ class WindowsHandler(OSHandler):
                 kb_raw[0] if isinstance(kb_raw, list) and kb_raw else ""
             )
             kb = kb or ""
-            out.append(MissingPatch(
+            patch = MissingPatch(
                 identifier=kb.replace("KB", "") or u.get("Title", "unknown"),
                 title=u.get("Title", ""),
                 severity=_severity_from_msrc(u.get("MsrcSeverity")),
                 package=kb or None,
                 reboot_required=bool(u.get("RebootRequired")),
                 metadata={"size_bytes": u.get("Size")},
-            ))
+            )
+            if minor_os_upgrade:
+                patch = replace(patch, severity="high", metadata={**patch.metadata, "minor_os_upgrade": True})
+            out.append(patch)
         return out
 
     # ------------------------------------------------------------------

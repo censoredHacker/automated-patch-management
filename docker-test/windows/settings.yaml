@@ -1,0 +1,32 @@
+# Test-only patchmgr settings for the Windows Docker target.
+#
+# - WinRM uses HTTPS with a self-signed cert generated inside the
+#   container at build time, so cert validation is OFF here. NEVER
+#   use this setting against a real production fleet — issue a real
+#   cert (internal CA / ACME) instead.
+# - SSH host-key checking is irrelevant for Windows but kept here so
+#   the file is a drop-in for both targets.
+# - Reports go into ./reports relative to wherever you run patchmgr.
+
+network:
+  connect_timeout_seconds: 30
+  ssh_strict_host_key_checking: false
+  winrm_server_cert_validation: ignore
+
+vulnerability_source:
+  provider: nvd
+  cache_ttl_hours: 24
+
+retries:
+  max_attempts: 2
+  backoff_seconds: 2
+  max_backoff_seconds: 15
+
+logging:
+  level: INFO
+  console: true
+  json: true
+
+reporting:
+  output_dir: ./reports
+  formats: [json, html]

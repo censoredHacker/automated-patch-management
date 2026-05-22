@@ -23,7 +23,7 @@ class DiscoveryReport:
     missing: list[MissingPatch]
 
 
-def discover(handler: OSHandler) -> DiscoveryReport:
+def discover(handler: OSHandler, *, minor_os_upgrade: bool = False) -> DiscoveryReport:
     """Run the full discovery sequence against *handler*.
 
     All three sub-calls are independent from the engine's perspective
@@ -38,7 +38,7 @@ def discover(handler: OSHandler) -> DiscoveryReport:
     installed = list(handler.list_packages())
     logger.info("found %d installed packages", len(installed))
 
-    missing = list(handler.list_missing_patches())
+    missing = list(handler.list_missing_patches(minor_os_upgrade=minor_os_upgrade))
     logger.info("found %d missing patches", len(missing))
 
     return DiscoveryReport(os_info=os_info, installed=installed, missing=missing)

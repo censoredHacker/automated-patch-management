@@ -9,8 +9,13 @@ covers installation, every CLI subcommand, and per-OS prerequisites.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/Scripts/activate          # Windows: .venv\Scripts\activate
+
+# for Development
 pip install -e .
+
+# for Testing
+pip install .
 ```
 
 Verify:

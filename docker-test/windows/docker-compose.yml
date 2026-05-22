@@ -1,0 +1,30 @@
+# docker-compose definition for the patchmgr Windows test target.
+#
+# Requires Docker Desktop switched to "Windows containers" mode.
+#
+# Usage:
+#     docker compose up -d --build      # build + start in background
+#     docker compose logs -f            # follow entrypoint output
+#     docker compose down               # stop + remove
+#
+# WinRM/HTTPS is published on host port 5986 bound to 127.0.0.1 only,
+# so nothing outside this machine can reach the (intentionally stale)
+# Windows Server Core image.
+
+services:
+  windows-vuln:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: patchmgr/windows-vuln:ltsc2022
+    container_name: patchmgr-windows-vuln
+    hostname: patchmgr-windows-vuln
+    ports:
+      - "127.0.0.1:5986:5986"   # WinRM HTTPS — bound to localhost only on purpose
+    networks:
+      - patchmgr-net
+    restart: "no"
+
+networks:
+  patchmgr-net:
+    driver: nat

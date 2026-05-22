@@ -1,0 +1,6 @@
+reports/
+*.log
+README.md
+docker-compose.yml
+settings.yaml
+scripts/

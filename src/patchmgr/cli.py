@@ -78,6 +78,8 @@ def _common_options(f):
     f = click.option("--log-level",
                      type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
                      default="INFO", show_default=True)(f)
+    f = click.option("--minor-os-upgrade", is_flag=True, default=False, show_default=True,
+                     help="Perform minor OS point-release upgrade instead of security patching.")(f)
     return f
 
 
@@ -149,16 +151,88 @@ def _summary_line(report: HostReport) -> str:
 # ---------------------------------------------------------------------------
 # Click groups & commands
 # ---------------------------------------------------------------------------
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+CLI_EPILOG = """\
+\b
+Subcommands:
+  scan     Discover and prioritise missing patches on a single host
+           (read-only — no changes are applied).
+  patch    Full lifecycle: discover, prioritise, remediate, and optionally
+           reboot a single host. Defaults to --dry-run.
+  batch    Run `scan` or `patch` against every host in an inventory YAML.
+  report   Re-render an existing report.json (HTML or pretty JSON).
+
+\b
+Common examples:
+  # Read-only scan of a Linux host over SSH
+  patchmgr scan --os linux --target 10.0.0.5:root:s3cret --severity-min high
+
+  # Same scan, password from stdin (safer for shell history / CI logs)
+  echo "$SSH_PASS" | patchmgr scan --os linux \\
+      --target 10.0.0.5:root --password-stdin
+
+  # Real patch run against a Windows host (WinRM), auto-reboot if requested
+  patchmgr patch --os windows --target 10.0.0.7:Administrator:Pa55w0rd \\
+      --reboot auto --no-dry-run
+
+  # Batch scan from inventory
+  patchmgr batch --inventory config/inventory.yaml --action scan
+
+  # Re-render a previous run's JSON as HTML
+  patchmgr report --input data/reports/<run-id>/report.json --format html
+
+\b
+Target string format:
+  --target IP[:PORT]:USERNAME[:PASSWORD]
+  Use '-' (or omit) the password field together with --password-stdin to
+  read it from stdin. For SSH key auth pass --key /path/to/id_rsa instead.
+
+\b
+Environment / .env (loaded automatically from CWD):
+  NVD_API_KEY            Optional NVD 2.0 API key (raises rate limit).
+  PATCHMGR_DEFAULT_USER  Fallback "user:pass" if --target omits credentials.
+
+\b
+Exit codes:
+  0  success
+  1  user/configuration error (bad arguments, missing file, ...)
+  2  partial failure — at least one host or patch failed
+  3  total failure — could not connect / unrecoverable error
+
+Run `patchmgr COMMAND --help` for per-subcommand options.
+"""
+
+
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 100},
+    epilog=CLI_EPILOG,
+)
 @click.version_option(__version__, prog_name="patchmgr")
 def cli() -> None:
-    """Cross-platform automated patch management."""
+    """Cross-platform automated patch management for Linux, Windows, and AIX hosts.
+
+    \b
+    `patchmgr` connects to a remote host (SSH for Linux/AIX, WinRM for Windows),
+    enumerates installed packages, correlates them against a vulnerability feed
+    (NVD 2.0 by default), prioritises fixes by severity, and — for the `patch`
+    subcommand — drives the OS-native package manager to apply them. Every run
+    produces a structured JSON + HTML report under `data/reports/<run-id>/`.
+
+    See the epilog below for examples and exit codes.
+    """
     # Load .env early so option defaults can read environment variables.
     load_dotenv(override=False)
 
 
 # ----------------------- scan ---------------------------------------------
-@cli.command()
+@cli.command(
+    epilog=(
+        "Example:\n"
+        "  patchmgr scan --os linux --target 10.0.0.5:root:s3cret "
+        "--severity-min high\n\n"
+        "Output: writes report.json and report.html under "
+        "<report-dir>/<run-id>/."
+    ),
+)
 @_common_options
 def scan(
     os_type: str,
@@ -171,8 +245,16 @@ def scan(
     report_dir: Optional[str],
     settings_path: Optional[str],
     log_level: str,
+    minor_os_upgrade: bool,
 ) -> None:
-    """Discover and prioritise patches on a single host. No changes applied."""
+    """Discover and prioritise patches on a single host. No changes applied.
+
+    \b
+    Connects to the target, enumerates installed packages, correlates them
+    with the configured vulnerability feed, drops anything below
+    --severity-min, and writes a JSON + HTML report. Always read-only;
+    use `patchmgr patch` to actually remediate.
+    """
     settings = _load_settings(settings_path, log_level=log_level, report_dir=report_dir)
     creds = _resolve_credentials(
         target_str,
@@ -193,6 +275,7 @@ def scan(
         reboot_mode="manual",
         dry_run=True,
         timeout=timeout,
+        minor_os_upgrade=minor_os_upgrade,
     )
     try:
         report = run_scan(opts, settings)
@@ -212,7 +295,20 @@ def scan(
 
 
 # ----------------------- patch --------------------------------------------
-@cli.command()
+@cli.command(
+    epilog=(
+        "Examples:\n"
+        "  # Dry-run (default) — shows what would be patched\n"
+        "  patchmgr patch --os linux --target 10.0.0.5:root:s3cret\n\n"
+        "  # Real run, auto-reboot if the OS asks for it\n"
+        "  patchmgr patch --os windows "
+        "--target 10.0.0.7:Administrator:Pa55w0rd \\\n"
+        "      --reboot auto --no-dry-run\n\n"
+        "  # Defer reboot to a maintenance window\n"
+        "  patchmgr patch --os linux --target host:user:pass \\\n"
+        "      --reboot scheduled --at 02:30 --no-dry-run\n"
+    ),
+)
 @_common_options
 @click.option("--reboot", "reboot_mode", type=click.Choice(REBOOT_MODES),
               default="manual", show_default=True,
@@ -235,8 +331,15 @@ def patch(
     reboot_mode: str,
     reboot_at: Optional[str],
     dry_run: bool,
+    minor_os_upgrade: bool,
 ) -> None:
-    """Discover, prioritise, and remediate vulnerabilities on a single host."""
+    """Discover, prioritise, and remediate vulnerabilities on a single host.
+
+    \b
+    By default this runs in --dry-run mode and only *simulates* remediation;
+    pass --no-dry-run to actually apply patches. Exit code 2 indicates one or
+    more patches failed; the JSON/HTML report lists exactly which.
+    """
     if reboot_mode == "scheduled" and not reboot_at:
         raise click.UsageError("--reboot scheduled requires --at HH:MM")
 
@@ -266,6 +369,7 @@ def patch(
         reboot_at=reboot_at,
         dry_run=dry_run,
         timeout=timeout,
+        minor_os_upgrade=minor_os_upgrade,
     )
     try:
         report = run_patch(opts, settings)
@@ -288,7 +392,14 @@ def patch(
 
 
 # ----------------------- batch --------------------------------------------
-@cli.command()
+@cli.command(
+    epilog=(
+        "Example:\n"
+        "  patchmgr batch --inventory config/inventory.yaml "
+        "--action scan\n\n"
+        "See config/inventory.example.yaml for the inventory schema."
+    ),
+)
 @click.option("--inventory", required=True, type=click.Path(exists=True, dir_okay=False),
               help="YAML inventory file describing the hosts.")
 @click.option("--action", type=click.Choice(["scan", "patch"]), default="scan",
@@ -308,7 +419,13 @@ def batch(
     report_dir: Optional[str],
     log_level: str,
 ) -> None:
-    """Run ``scan`` or ``patch`` against every host in an inventory file."""
+    """Run ``scan`` or ``patch`` against every host in an inventory file.
+
+    \b
+    Per-host failures do not abort the batch; they are logged and counted
+    toward the final exit status (2 = at least one host failed). An aggregate
+    summary report is written at <report-dir>/batch-<id>/summary.json.
+    """
     settings = _load_settings(settings_path, log_level=log_level, report_dir=report_dir)
     aggregate_id = str(uuid.uuid4())[:8]
     log_file = _setup_logging(settings, f"batch-{aggregate_id}")
@@ -389,14 +506,25 @@ def batch(
 
 
 # ----------------------- report -------------------------------------------
-@cli.command()
+@cli.command(
+    epilog=(
+        "Example:\n"
+        "  patchmgr report --input data/reports/<run-id>/report.json "
+        "--format html"
+    ),
+)
 @click.option("--input", "input_path", required=True,
               type=click.Path(exists=True, dir_okay=False),
               help="Path to an existing report.json file.")
 @click.option("--format", "fmt", type=click.Choice(["html", "json"]),
               default="html", show_default=True)
 def report(input_path: str, fmt: str) -> None:
-    """Re-render an existing JSON report."""
+    """Re-render an existing JSON report as HTML or pretty-printed JSON.
+
+    \b
+    Useful for regenerating the HTML view after editing templates, or for
+    piping a previous run's JSON into other tooling without re-scanning.
+    """
     data = json.loads(Path(input_path).read_text(encoding="utf-8"))
     if fmt == "json":
         click.echo(json.dumps(data, indent=2))
